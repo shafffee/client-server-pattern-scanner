@@ -1,0 +1,1 @@
+add_executable(stats_viewer_app main.cpp)

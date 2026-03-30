@@ -1,0 +1,1 @@
+add_executable(client_app main.cpp)
