@@ -74,12 +74,12 @@ int main(int argc, char* argv[]) {
             }
 
             try {
-                const std::string input = read_all_from_socket(client_socket);
+                const std::string input = recv_message(client_socket);
                 const ScanResult result = scan_content(input, config);
                 const std::string response = build_response(result);
 
                 std::cout << "Received " << input.size() << " bytes from client\n";
-                send_all(client_socket, response);
+                send_message(client_socket, response);
             } catch (const std::exception& e) {
                 std::cerr << "Client handling error: " << e.what() << "\n";
             }

@@ -28,10 +28,10 @@ int main(int argc, char* argv[]) {
 
         const int client_socket = connect_to_server(port);
 
-        send_all(client_socket, content);
+        send_message(client_socket, content);
         shutdown(client_socket, SHUT_WR);
 
-        const std::string response = read_all_from_socket(client_socket);
+        const std::string response = recv_message(client_socket);
 
         close(client_socket);
 
