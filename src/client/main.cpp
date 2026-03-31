@@ -29,7 +29,6 @@ int main(int argc, char* argv[]) {
         const int client_socket = connect_to_server(port);
 
         send_message(client_socket, content);
-        shutdown(client_socket, SHUT_WR);
 
         const std::string response = recv_message(client_socket);
 

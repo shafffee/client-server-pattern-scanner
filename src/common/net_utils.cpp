@@ -9,15 +9,16 @@
 #include <stdexcept>
 #include <string>
 #include <cstdint>
+#include <cerrno>
 
 #define MAX_MESSAGE_SIZE 16*1024*1024 //16MB
 
-inline bool is_little_endian() {
+bool is_little_endian() {
     const std::uint16_t value = 0x0001;
     return *reinterpret_cast<const std::uint8_t*>(&value) == 0x01;
 }
 
-inline std::uint64_t byteswap_u64(std::uint64_t value) {
+std::uint64_t byteswap_u64(std::uint64_t value) {
     return ((value & 0x00000000000000FFULL) << 56) |
            ((value & 0x000000000000FF00ULL) << 40) |
            ((value & 0x0000000000FF0000ULL) << 24) |
@@ -28,11 +29,11 @@ inline std::uint64_t byteswap_u64(std::uint64_t value) {
            ((value & 0xFF00000000000000ULL) >> 56);
 }
 
-inline std::uint64_t to_big_endian(std::uint64_t value) {
+std::uint64_t to_big_endian(std::uint64_t value) {
     return is_little_endian() ? byteswap_u64(value) : value;
 }
 
-inline std::uint64_t from_big_endian(std::uint64_t value) {
+std::uint64_t from_big_endian(std::uint64_t value) {
     return is_little_endian() ? byteswap_u64(value) : value;
 }
 
@@ -98,10 +99,13 @@ void send_data(int socket_fd, const void* data, std::size_t size) {
             socket_fd,
             buffer + total_sent,
             size - total_sent,
-            0
+            MSG_NOSIGNAL
         );
 
         if (sent < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             throw std::runtime_error("Failed to send data to socket");
         }
         if (sent == 0) {
@@ -125,6 +129,9 @@ void recv_data(int socket_fd, void* data, std::size_t size) {
         );
 
         if (received < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
             throw std::runtime_error("Failed to read data from socket");
         }
 
@@ -136,7 +143,7 @@ void recv_data(int socket_fd, void* data, std::size_t size) {
     }
 }
 
-void send_message(int socket_fd, std::string message) {
+void send_message(int socket_fd, const std::string& message) {
     const std::uint64_t size = static_cast<std::uint64_t>(message.size());
     const std::uint64_t size_be = to_big_endian(size);
 
