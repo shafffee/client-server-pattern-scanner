@@ -6,12 +6,31 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include<sys/wait.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
+#include <cerrno>
+#include <csignal>
 #include <iostream>
 #include <stdexcept>
 #include <string>
+
+volatile sig_atomic_t g_child_signal_received = 0;
+
+extern "C" void handle_sigchld(int) {
+    g_child_signal_received = 1;
+}
+
+void install_sigchld_handler() {
+    struct sigaction sa{};
+    sa.sa_handler = handle_sigchld;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_NOCLDSTOP;
+
+    if (sigaction(SIGCHLD, &sa, nullptr) < 0) {
+        throw std::runtime_error("Failed to install SIGCHLD handler");
+    }
+}
 
 void print_usage(const char* program_name) {
     std::cerr << "Usage: " << program_name << " <config_path> <port>\n";
@@ -34,7 +53,7 @@ std::string build_response(const ScanResult& result) {
     return response;
 }
 
-void handle_client(int client_socket, const ServerConfig& config){
+void handle_client(int client_socket, const ServerConfig& config) {
     const std::string input = recv_message(client_socket);
     const ScanResult result = scan_content(input, config);
     const std::string response = build_response(result);
@@ -78,9 +97,11 @@ int main(int argc, char* argv[]) {
         const ServerConfig config = load_config(config_path);
         const int server_socket = create_listening_socket(port);
 
-        std::cout << "==================================" << std::endl;  
-        std::cout << "SERVER                            " << std::endl; 
-        std::cout << "==================================" << std::endl;
+        install_sigchld_handler();
+
+        std::cout << "==================================\n";
+        std::cout << "SERVER\n";
+        std::cout << "==================================\n";
 
         std::cout << "Port: " << port << "\n";
         std::cout << "Loaded patterns:\n";
@@ -88,11 +109,14 @@ int main(int argc, char* argv[]) {
         for (const auto& pattern : config.patterns) {
             std::cout << " - " << pattern << "\n";
         }
-        std::cout << "==================================" << std::endl;
+        std::cout << "==================================\n";
         std::cout << "Waiting for clients...\n";
 
         while (true) {
-            cleanup_child_processes();
+            if (g_child_signal_received) {
+                g_child_signal_received = 0;
+                cleanup_child_processes();
+            }
 
             sockaddr_in client_addr{};
             socklen_t client_len = sizeof(client_addr);
@@ -105,8 +129,13 @@ int main(int argc, char* argv[]) {
 
             if (client_socket < 0) {
                 if (errno == EINTR) {
+                    if (g_child_signal_received) {
+                        g_child_signal_received = 0;
+                        cleanup_child_processes();
+                    }
                     continue;
                 }
+
                 std::cerr << "Failed to accept client\n";
                 continue;
             }
@@ -122,6 +151,7 @@ int main(int argc, char* argv[]) {
             if (pid == 0) {
                 // child
                 close(server_socket);
+
                 try {
                     handle_client(client_socket, config);
                     close(client_socket);
