@@ -1,6 +1,12 @@
 #include "config.hpp"
 #include "port.hpp"
 #include "scanner.hpp"
+#include "net_utils.hpp"
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -8,6 +14,23 @@
 
 void print_usage(const char* program_name) {
     std::cerr << "Usage: " << program_name << " <config_path> <port>\n";
+}
+
+std::string build_response(const ScanResult& result) {
+    std::string response;
+
+    if (result.infected) {
+        response += "Scan result: INFECTED\n";
+        response += "Matched patterns:\n";
+
+        for (const auto& pattern : result.matched_patterns) {
+            response += " [!] " + pattern + "\n";
+        }
+    } else {
+        response += "Scan result: CLEAN\n";
+    }
+
+    return response;
 }
 
 int main(int argc, char* argv[]) {
@@ -21,6 +44,7 @@ int main(int argc, char* argv[]) {
         const int port = parse_port(argv[2]);
 
         const ServerConfig config = load_config(config_path);
+        const int server_socket = create_listening_socket(port);
 
         std::cout << "==================================" << std::endl;  
         std::cout << "SERVER                            " << std::endl; 
@@ -34,23 +58,36 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "==================================" << std::endl;
 
-        while(true){
-            std::string input;
-            std::getline(std::cin, input);
+        while (true) {
+            sockaddr_in client_addr{};
+            socklen_t client_len = sizeof(client_addr);
 
-            ScanResult result = scan_content(input, config);
+            const int client_socket = accept(
+                server_socket,
+                reinterpret_cast<sockaddr*>(&client_addr),
+                &client_len
+            );
 
-            if (result.infected) {
-                std::cout << "Scan result: INFECTED\n";
-                std::cout << "Matched patterns:\n";
-            for (const auto& pattern : result.matched_patterns) {
-                std::cout << " [!] " << pattern << "\n";
+            if (client_socket < 0) {
+                std::cerr << "Failed to accept client\n";
+                continue;
             }
-            } else {
-                std::cout << "Scan result: CLEAN\n";
+
+            try {
+                const std::string input = read_all_from_socket(client_socket);
+                const ScanResult result = scan_content(input, config);
+                const std::string response = build_response(result);
+
+                std::cout << "Received " << input.size() << " bytes from client\n";
+                send_all(client_socket, response);
+            } catch (const std::exception& e) {
+                std::cerr << "Client handling error: " << e.what() << "\n";
             }
+
+            close(client_socket);
         }
 
+        close(server_socket);
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";

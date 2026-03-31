@@ -1,5 +1,11 @@
 #include "file_reader.hpp"
 #include "port.hpp"
+#include "net_utils.hpp"
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <stdexcept>
@@ -20,11 +26,22 @@ int main(int argc, char* argv[]) {
         const int port = parse_port(argv[2]);
         const std::string content = read_file(file_path);
 
-        std::cout << "client_app\n";
-        std::cout << "Port: " << port << "\n";
-        std::cout << "File size: " << content.size() << " bytes\n";
-        std::cout << "File content:\n";
-        std::cout << content << "\n";
+        const int client_socket = connect_to_server(port);
+
+        send_all(client_socket, content);
+        shutdown(client_socket, SHUT_WR);
+
+        const std::string response = read_all_from_socket(client_socket);
+
+        close(client_socket);
+
+        std::cout << "==================================\n";
+        std::cout << "CLIENT\n";
+        std::cout << "==================================\n";
+        std::cout << "Sent file: " << file_path << "\n";
+        std::cout << "Sent bytes: " << content.size() << "\n";
+        std::cout << "==================================\n";
+        std::cout << response;
 
         return 0;
     } catch (const std::exception& e) {
