@@ -16,19 +16,37 @@
 #include <string>
 
 volatile sig_atomic_t g_child_signal_received = 0;
+volatile sig_atomic_t g_stop_requested = 0;
 
 extern "C" void handle_sigchld(int) {
     g_child_signal_received = 1;
 }
 
-void install_sigchld_handler() {
-    struct sigaction sa{};
-    sa.sa_handler = handle_sigchld;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_NOCLDSTOP;
+extern "C" void handle_termination_signal(int) {
+    g_stop_requested = 1;
+}
 
-    if (sigaction(SIGCHLD, &sa, nullptr) < 0) {
+void install_signal_handlers() {
+    struct sigaction chld_action{};
+    chld_action.sa_handler = handle_sigchld;
+    sigemptyset(&chld_action.sa_mask);
+    chld_action.sa_flags = SA_NOCLDSTOP;
+
+    if (sigaction(SIGCHLD, &chld_action, nullptr) < 0) {
         throw std::runtime_error("Failed to install SIGCHLD handler");
+    }
+
+    struct sigaction term_action{};
+    term_action.sa_handler = handle_termination_signal;
+    sigemptyset(&term_action.sa_mask);
+    term_action.sa_flags = 0;
+
+    if (sigaction(SIGINT, &term_action, nullptr) < 0) {
+        throw std::runtime_error("Failed to install SIGINT handler");
+    }
+
+    if (sigaction(SIGTERM, &term_action, nullptr) < 0) {
+        throw std::runtime_error("Failed to install SIGTERM handler");
     }
 }
 
@@ -84,6 +102,29 @@ void cleanup_child_processes() {
     }
 }
 
+void wait_for_all_children() {
+    while (true) {
+        const pid_t pid = waitpid(-1, nullptr, 0);
+
+        if (pid > 0) {
+            std::cout << "Waited for child process " << pid << "\n";
+            continue;
+        }
+
+        if (pid < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            if (errno == ECHILD) {
+                break;
+            }
+
+            break;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 3) {
         print_usage(argv[0]);
@@ -97,7 +138,7 @@ int main(int argc, char* argv[]) {
         const ServerConfig config = load_config(config_path);
         const int server_socket = create_listening_socket(port);
 
-        install_sigchld_handler();
+        install_signal_handlers();
 
         std::cout << "==================================\n";
         std::cout << "SERVER\n";
@@ -109,10 +150,11 @@ int main(int argc, char* argv[]) {
         for (const auto& pattern : config.patterns) {
             std::cout << " - " << pattern << "\n";
         }
+
         std::cout << "==================================\n";
         std::cout << "Waiting for clients...\n";
 
-        while (true) {
+        while (!g_stop_requested) {
             if (g_child_signal_received) {
                 g_child_signal_received = 0;
                 cleanup_child_processes();
@@ -133,6 +175,11 @@ int main(int argc, char* argv[]) {
                         g_child_signal_received = 0;
                         cleanup_child_processes();
                     }
+
+                    if (g_stop_requested) {
+                        break;
+                    }
+
                     continue;
                 }
 
@@ -168,7 +215,14 @@ int main(int argc, char* argv[]) {
             close(client_socket);
         }
 
+        std::cout << "Shutdown requested. Stopping server...\n";
+
         close(server_socket);
+
+        cleanup_child_processes();
+        wait_for_all_children();
+
+        std::cout << "Server stopped.\n";
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
