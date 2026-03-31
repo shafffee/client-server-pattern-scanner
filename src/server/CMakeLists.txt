@@ -1,6 +1,7 @@
 add_executable(server_app
     main.cpp
     config.cpp
+    scanner.cpp
 )
 
 target_include_directories(server_app PRIVATE

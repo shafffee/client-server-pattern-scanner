@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include "port.hpp"
+#include "scanner.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -21,12 +22,33 @@ int main(int argc, char* argv[]) {
 
         const ServerConfig config = load_config(config_path);
 
-        std::cout << "server_app\n";
+        std::cout << "==================================" << std::endl;  
+        std::cout << "SERVER                            " << std::endl; 
+        std::cout << "==================================" << std::endl;
+
         std::cout << "Port: " << port << "\n";
         std::cout << "Loaded patterns:\n";
 
         for (const auto& pattern : config.patterns) {
             std::cout << " - " << pattern << "\n";
+        }
+        std::cout << "==================================" << std::endl;
+
+        while(true){
+            std::string input;
+            std::getline(std::cin, input);
+
+            ScanResult result = scan_content(input, config);
+
+            if (result.infected) {
+                std::cout << "Scan result: INFECTED\n";
+                std::cout << "Matched patterns:\n";
+            for (const auto& pattern : result.matched_patterns) {
+                std::cout << " [!] " << pattern << "\n";
+            }
+            } else {
+                std::cout << "Scan result: CLEAN\n";
+            }
         }
 
         return 0;
