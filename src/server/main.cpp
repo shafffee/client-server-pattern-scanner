@@ -15,18 +15,23 @@
 #include <stdexcept>
 #include <string>
 
+// flags for main to react to signals
 volatile sig_atomic_t g_child_signal_received = 0;
 volatile sig_atomic_t g_stop_requested = 0;
 
+// mark that a child has finished
 extern "C" void handle_sigchld(int) {
     g_child_signal_received = 1;
 }
 
+// mark that server shutdown was requested
 extern "C" void handle_termination_signal(int) {
     g_stop_requested = 1;
 }
 
+// install all signal handlers used by the server
 void install_signal_handlers() {
+    // SIGCHLD
     struct sigaction chld_action{};
     chld_action.sa_handler = handle_sigchld;
     sigemptyset(&chld_action.sa_mask);
@@ -36,6 +41,7 @@ void install_signal_handlers() {
         throw std::runtime_error("Failed to install SIGCHLD handler");
     }
 
+    // SIGINT / SIGTERM
     struct sigaction term_action{};
     term_action.sa_handler = handle_termination_signal;
     sigemptyset(&term_action.sa_mask);
@@ -50,10 +56,13 @@ void install_signal_handlers() {
     }
 }
 
+// print server usage
 void print_usage(const char* program_name) {
     std::cerr << "Usage: " << program_name << " <config_path> <port>\n";
 }
 
+
+// create a response for the client
 std::string build_response(const ScanResult& result) {
     std::string response;
 
@@ -71,6 +80,7 @@ std::string build_response(const ScanResult& result) {
     return response;
 }
 
+// handle one client request
 void handle_client(int client_socket, const ServerConfig& config) {
     const std::string input = recv_message(client_socket);
     const ScanResult result = scan_content(input, config);
@@ -80,6 +90,7 @@ void handle_client(int client_socket, const ServerConfig& config) {
     send_message(client_socket, response);
 }
 
+// collect finished child processes to avoid zombies
 void cleanup_child_processes() {
     while (true) {
         const pid_t pid = waitpid(-1, nullptr, WNOHANG);
@@ -102,6 +113,7 @@ void cleanup_child_processes() {
     }
 }
 
+// wait for all children to finish
 void wait_for_all_children() {
     while (true) {
         const pid_t pid = waitpid(-1, nullptr, 0);
@@ -125,6 +137,7 @@ void wait_for_all_children() {
     }
 }
 
+// start server, accept clients, fork children, and stop gracefully
 int main(int argc, char* argv[]) {
     if (argc != 3) {
         print_usage(argv[0]);
@@ -196,7 +209,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (pid == 0) {
-                // child
+                // child handles one client and then exits
                 close(server_socket);
 
                 try {
@@ -210,11 +223,12 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // parent
+            // parent closes client socket and goes back to accept
             std::cout << "Child process created with PID: " << pid << "\n";
             close(client_socket);
         }
 
+        // On stop requested - stop accepting new clients and wait for children
         std::cout << "Shutdown requested. Stopping server...\n";
 
         close(server_socket);

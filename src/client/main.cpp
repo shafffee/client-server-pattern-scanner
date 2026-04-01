@@ -11,10 +11,12 @@
 #include <stdexcept>
 #include <string>
 
+// print correct client usage
 void print_usage(const char* program_name) {
     std::cerr << "Usage: " << program_name << " <file_path> <port>\n";
 }
 
+// read the file, send it to server, print the response
 int main(int argc, char* argv[]) {
     if (argc != 3) {
         print_usage(argv[0]);

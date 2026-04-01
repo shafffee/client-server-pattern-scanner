@@ -1,5 +1,6 @@
 #include "scanner.hpp"
 
+// scan file content and get all matched patterns
 ScanResult scan_content(const std::string& content, const ServerConfig& config) {
     ScanResult result;
 

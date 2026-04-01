@@ -13,11 +13,13 @@
 
 #define MAX_MESSAGE_SIZE 16*1024*1024 //16MB
 
+// check host byte order so we can pack message size correctly
 bool is_little_endian() {
     const std::uint16_t value = 0x0001;
     return *reinterpret_cast<const std::uint8_t*>(&value) == 0x01;
 }
 
+// swap bytes for 64-bit values
 std::uint64_t byteswap_u64(std::uint64_t value) {
     return ((value & 0x00000000000000FFULL) << 56) |
            ((value & 0x000000000000FF00ULL) << 40) |
@@ -29,14 +31,17 @@ std::uint64_t byteswap_u64(std::uint64_t value) {
            ((value & 0xFF00000000000000ULL) >> 56);
 }
 
+// convert value to big endian for network transfer
 std::uint64_t to_big_endian(std::uint64_t value) {
     return is_little_endian() ? byteswap_u64(value) : value;
 }
 
+// convert big endian value back to host value
 std::uint64_t from_big_endian(std::uint64_t value) {
     return is_little_endian() ? byteswap_u64(value) : value;
 }
 
+// create a client socket and connect to localhost server
 int connect_to_server(int port) {
     const int client_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (client_socket < 0) {
@@ -60,6 +65,7 @@ int connect_to_server(int port) {
     return client_socket;
 }
 
+// create a server socket, bind it, and start listening
 int create_listening_socket(int port) {
     const int server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket < 0) {
@@ -90,6 +96,7 @@ int create_listening_socket(int port) {
     return server_socket;
 }
 
+// send exactly size bytes to the socket
 void send_data(int socket_fd, const void* data, std::size_t size) {
     const char* buffer = static_cast<const char*>(data);
     size_t total_sent = 0;
@@ -116,6 +123,7 @@ void send_data(int socket_fd, const void* data, std::size_t size) {
     }
 }
 
+// receive exactly size bytes from the socket
 void recv_data(int socket_fd, void* data, std::size_t size) {
     char* buffer = static_cast<char*>(data);
     std::size_t total_received = 0;
@@ -143,6 +151,7 @@ void recv_data(int socket_fd, void* data, std::size_t size) {
     }
 }
 
+// send one full message with size prefix
 void send_message(int socket_fd, const std::string& message) {
     const std::uint64_t size = static_cast<std::uint64_t>(message.size());
     const std::uint64_t size_be = to_big_endian(size);
@@ -154,6 +163,7 @@ void send_message(int socket_fd, const std::string& message) {
     }
 }
 
+// receive one full message using the size prefix
 std::string recv_message(int socket_fd) {
     std::uint64_t size_be = 0;
     recv_data(socket_fd, &size_be, sizeof(size_be));

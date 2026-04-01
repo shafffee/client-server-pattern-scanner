@@ -7,6 +7,7 @@
 
 using json = nlohmann::json;
 
+// load and validate the server config file (from JSON)
 ServerConfig load_config(const std::string& path) {
     std::ifstream input(path);
     if (!input.is_open()) {

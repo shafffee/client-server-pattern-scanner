@@ -4,6 +4,7 @@
 #include <sstream>
 #include <stdexcept>
 
+// read the whole file into one string
 std::string read_file(const std::string& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
