@@ -17,6 +17,8 @@ cmake ..
 cmake --build .
 ```
 
+---
+
 ## How to run
 
 Advice: open **two or three terminal windows**.
@@ -36,8 +38,6 @@ The server will:
 * accept clients
 * keep scan statistics
 * serve statistics requests through FIFO
-
----
 
 ### 2. Run the client
 
@@ -61,8 +61,6 @@ Expected result:
 * the client connects to the server
 * the server scans the file
 * the client prints scan report
-
----
 
 ### 3. View current statistics
 
