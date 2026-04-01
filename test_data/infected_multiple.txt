@@ -1,0 +1,2 @@
+this sample includes virus, trojan, worm, and malware patterns
+it should trigger multiple detections in one scan

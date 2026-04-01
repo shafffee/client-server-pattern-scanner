@@ -1,0 +1,3 @@
+hello from the clean test file
+this file should not match any pattern
+just a normal text message

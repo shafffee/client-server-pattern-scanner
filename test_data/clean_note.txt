@@ -1,0 +1,3 @@
+today I wrote some notes about the scanner project
+everything is working fine
+there is nothing suspicious here

@@ -1,0 +1,2 @@
+this file contains a virus signature
+please mark it as infected

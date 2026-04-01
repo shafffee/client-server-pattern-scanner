@@ -1,0 +1,2 @@
+this text mentions trojan behavior
+the scanner should detect it
